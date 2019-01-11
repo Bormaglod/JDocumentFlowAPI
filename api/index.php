@@ -15,15 +15,15 @@ $config['addContentLengthHeader'] = false;
 
 $app = new \Slim\App(["settings" => $config]);
 
-$app->post('/v1/login', 'login_user');
-$app->get('/v1/logout', 'logout_user');
-$app->get('/v1/menu', 'get_menu');
-$app->get('/v1/pictures', 'get_pictures');
-$app->get('/v1/commands/{ref}', 'get_commands');
-$app->post('/v1/groups', 'add_group');
-$app->put('/v1/groups/{id}', 'update_group');
-$app->delete('/v1/groups/{id}', 'delete_group');
-$app->get('/v1/users', 'get_users');
+$app->post('/login', 'login_user');
+$app->get('/logout', 'logout_user');
+$app->get('/menu', 'get_menu');
+$app->get('/pictures', 'get_pictures');
+$app->get('/commands/{ref}', 'get_commands');
+$app->post('/groups', 'add_group');
+$app->put('/groups/{id}', 'update_group');
+$app->delete('/groups/{id}', 'delete_group');
+$app->get('/users', 'get_users');
 
 $app->options('/{routes:.+}', function ($request, $response, $args) {
    return $response;
@@ -44,15 +44,104 @@ $app->map(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], '/{routes:.+}', function($r
 
 $app->run();
 
-function update_expired_time()
-{
+function get_version(Request $request) {
+   $accept = strtolower(str_replace(' ', '', $request->getHeaderLine('Accept')));
+
+   $accept_list = explode(',', $accept);
+   foreach ($accept_list as $item) {
+      $item_list = explode(';', $item);
+      if ($item_list[0] === 'application/vnd.document-flow.api+json') {
+         $version = explode('=', $item_list[1]);
+         return $version[1];
+      }
+   }
+
+   return 0;
+}
+
+function update_expired_time() {
    $_SESSION['time_expired'] = strtotime('+1 day');
 }
 
-function get_users(Request $request, Response $response)
+function array_select($menu, $parent_id) {
+	$result = [];
+	foreach($menu as $item) { 
+		if (is_null($parent_id)) {
+			if (is_null($item['parent_id'])) {
+            $result[] = $item;
+         }
+		} else {
+			if ($item['parent_id'] == $parent_id) {
+            $result[] = $item;
+         }
+		}
+	}
+		
+	return $result;
+}
+
+function generate_menu($menu, $parent_id  = null) {
+	$result = array_select($menu, $parent_id);
+	for($i = 0; $i < count($result); $i++) {
+		$submenu = generate_menu($menu, $result[$i]['id']);
+		$result[$i]['nodes'] = $submenu;
+	}
+		
+	return $result;
+}
+
+function check_token($params, Response $response) {
+   if (array_key_exists('token', $params)) {
+      if ($_SESSION['token'] !== $params['token']) {
+         return $response->withJson(['error_code' => -0x01200, 'message' => 'Указан неверный идентификатор пользователя'], StatusCode::HTTP_UNAUTHORIZED);
+      }
+
+      if (time() > $_SESSION['time_expired']) {
+         return $response->withJson(['error_code' => -0x01201, 'message' => 'Вас слишком долго не было. Сессия была закрыта.'], StatusCode::HTTP_UNAUTHORIZED);
+      }
+
+      return $response;
+   }
+
+   return $response->withJson(['error_code' => -0x01202, 'message' => 'Запрос требует указания идентификатора пользователя.'], StatusCode::HTTP_UNAUTHORIZED);
+}
+
+function check_version($version, Response $response)
 {
-   try
-   {
+   if ($version == 0) {
+      return $response->withJson(['error_code' => -0x1100, 'message' => 'Необходимо указать версию API.'], StatusCode::HTTP_BAD_REQUEST);
+   }
+
+   return $response;
+}
+
+function get_rows($select, $param_values = []) {
+   $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
+   $query = $connect->prepare($select);
+
+   // получение всех параметров запоса вида ':параметр'
+   preg_match_all('/(?<!:):([a-zA-Z]{1}[a-zA-Z_0-9]*)/', $select, $param_names, PREG_SET_ORDER);
+
+   foreach ($param_names as $name) {
+       $param_type = array_key_exists($name[1], $param_values) ? PDO::PARAM_STR : PDO::PARAM_NULL;
+       $query->bindParam($name[0], $param_values[$name[1]], $param_type);
+   }
+
+   $query->execute();
+   $total_rows = $query->rowCount();
+   $rows = $query->fetchAll();
+
+   $data = [ 'total_rows' => $total_rows, 'rows' => $rows ];
+   return $data;
+}
+
+function get_users(Request $request, Response $response) {
+   $version = get_version($request);
+   $response = check_version($version, $response);
+
+   if ($response->isClientError()) return $response;
+
+   try {
       $connect = (new Db(["user" => 'guest', "password" => 'guest']))->getConnect();
       $query = $connect->prepare('select * from client where not administrator and parent_id is not null');
       $query->execute();
@@ -62,19 +151,20 @@ function get_users(Request $request, Response $response)
 
       $data = [ 'total_rows' => $total_rows, 'rows' => $rows ];
       return $response->withJson($data);
-   }
-   catch (PDOException $e)
-   {
+   } catch (PDOException $e) {
       return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
    }
 }
 
-function login_user(Request $request, Response $response)
-{
+function login_user(Request $request, Response $response) {
+   $version = get_version($request);
+   $response = check_version($version, $response);
+   
+   if ($response->isClientError()) return $response;
+
    $params = $request->getParsedBody();
    
-   try
-   {
+   try {
       $connect = (new Db(["user" => 'guest', "password" => 'guest']))->getConnect();
       
       $query = $connect->prepare('select pg_name from client where name = :name');
@@ -82,8 +172,7 @@ function login_user(Request $request, Response $response)
       $query->execute();
       $user = $query->fetchColumn();
 
-      if ($user)
-      {
+      if ($user) {
          $connect = (new Db(array("user" => $user, "password" => $params['password'])))->getConnect();
       
          $query = $connect->prepare('select login()');
@@ -95,38 +184,34 @@ function login_user(Request $request, Response $response)
          update_expired_time();
 
          return $response->withJson(['token' => $_SESSION['token']]);
+      } else {
+         return $response->withJson(['error_code' => -0x01000, 'message' => 'Пользователь ' . $params['username'] . ' не зарегестрирован.'], StatusCode::HTTP_BAD_REQUEST);
       }
-      else
-      {
-         return $response->withJson(['error_code' => -0x01000, 'message' => 'Пользователь ' . $params['username'] . ' не зарегестрирован.'], StatusCode::HTTP_NOT_FOUND);
-      }
-   }
-   catch (PDOException $e)
-   {
+   } catch (PDOException $e) {
       return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
    }
 }
 
-function logout_user(Request $request, Response $response)
-{
+function logout_user(Request $request, Response $response) {
+   $version = get_version($request);
+   $response = check_version($version, $response);
+   
+   if ($response->isClientError()) return $response;
+
    $params = $request->getQueryParams();
    $response = check_token($params, $response);
-   if ($response->getStatusCode() == StatusCode::HTTP_OK)
-   {
+   if ($response->isOk()) {
       $connect = (new Db(array("user" => $user, "password" => $params['password'])))->getConnect();
       
       $query = $connect->prepare('select logout()');
 
-      try
-      {
+      try {
          $query->execute();
          unset($_SESSION['user']);
          unset($_SESSION['password']);
          unset($_SESSION['token']);
          unset($_SESSION['time_expired']);
-      }
-      catch (PDOException $e)
-      {
+      } catch (PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
       }
    }
@@ -134,66 +219,16 @@ function logout_user(Request $request, Response $response)
    return $response;
 }
 
-function array_select($menu, $parent_id)
-{
-	$result = [];
-	foreach($menu as $item) 
-	{ 
-		if (is_null($parent_id))
-		{
-			if (is_null($item['parent_id']))
-				$result[] = $item;
-		}
-		else
-		{
-			if ($item['parent_id'] == $parent_id)
-				$result[] = $item;
-		}
-	}
-		
-	return $result;
-}
+function get_menu(Request $request, Response $response) {
+   $version = get_version($request);
+   $response = check_version($version, $response);
+   
+   if ($response->isClientError()) return $response;
 
-function generate_menu($menu, $parent_id  = null)
-{
-	$result = array_select($menu, $parent_id);
-	for($i = 0; $i < count($result); $i++) 
-	{
-		$submenu = generate_menu($menu, $result[$i]['id']);
-		$result[$i]['nodes'] = $submenu;
-	}
-		
-	return $result;
-}
-
-function check_token($params, Response $response)
-{
-   if (array_key_exists('token', $params))
-   {
-      if ($_SESSION['token'] !== $params['token'])
-      {
-         return $response->withJson(['error_code' => -0x02000, 'message' => 'Указан неверный идентификатор пользователя'], StatusCode::HTTP_UNAUTHORIZED);
-      }
-
-      if (time() > $_SESSION['time_expired'])
-      {
-         return $response->withJson(['error_code' => -0x02001, 'message' => 'Вас слишком долго не было. Сессия была закрыта.'], StatusCode::HTTP_UNAUTHORIZED);
-      }
-
-      return $response;
-   }
-
-   return $response->withJson(['error_code' => -0x02002, 'message' => 'Запрос требует указания идентификатора пользователя.'], StatusCode::HTTP_UNAUTHORIZED);
-}
-
-function get_menu(Request $request, Response $response)
-{
    $params = $request->getQueryParams();
    $response = check_token($params, $response);
-   if ($response->getStatusCode() == StatusCode::HTTP_OK)
-   {
-      try
-      {
+   if ($response->isOk()) {
+      try {
          $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
          $query = $connect->prepare('select * from select_menu()');
 	      $query->execute();
@@ -203,9 +238,7 @@ function get_menu(Request $request, Response $response)
          update_expired_time();
 
          return $response->withJson(generate_menu($menu));
-      }
-      catch (PDOException $e)
-      {
+      } catch (PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
       }
    }
@@ -213,25 +246,25 @@ function get_menu(Request $request, Response $response)
    return $response;
 }
 
-function get_commands(Request $request, Response $response, $args)
-{
+function get_commands(Request $request, Response $response, $args) {
+   $version = get_version($request);
+   $response = check_version($version, $response);
+   
+   if ($response->isClientError()) return $response;
+
    $params = $request->getQueryParams();
    $response = check_token($params, $response);
-   if ($response->getStatusCode() == StatusCode::HTTP_OK)
-   {
-      if (!array_key_exists('type', $params))
-      {
-         return $response->withJson(['error_code' => -0x03000, 'message' => 'не указан тип команды.'], StatusCode::HTTP_NOT_FOUND);
+   if ($response->isOk()) {
+      if (!array_key_exists('type', $params)) {
+         return $response->withJson(['error_code' => -0x02000, 'message' => 'не указан тип команды.'], StatusCode::HTTP_NOT_FOUND);
       }
 
       $type = $params['type'];
-      if ($type !== 'id' && $type !== 'code')
-      {
-         return $response->withJson(['error_code' => -0x03001, 'message' => 'Неизвестный тип команды.'], StatusCode::HTTP_NOT_FOUND);
+      if ($type !== 'id' && $type !== 'code') {
+         return $response->withJson(['error_code' => -0x02001, 'message' => 'Неизвестный тип команды.'], StatusCode::HTTP_NOT_FOUND);
       }
 
-      try
-      {
+      try {
          $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
          $query = $connect->prepare("select * from get_command_by_$type(:command)");
 	      $query->bindParam(':command', $args['ref']);
@@ -239,13 +272,10 @@ function get_commands(Request $request, Response $response, $args)
 	
 	      $result = $query->fetch();
 
-         if ($result)
-         {
+         if ($result) {
    	      $schema_data = json_decode($result['schema_data']);
-	         foreach ($schema_data->viewer->datasets as $db)
-	         {
-		         if ($db->name == $schema_data->viewer->master) 
-		         {
+	         foreach ($schema_data->viewer->datasets as $db) {
+		         if ($db->name == $schema_data->viewer->master) {
                   $select = $db->select;
                 
                   $query = $connect->prepare('select * from get_info_table(:code_table)');
@@ -260,14 +290,10 @@ function get_commands(Request $request, Response $response, $args)
 	
 	         $result['schema_data'] = $schema_data;
             return $response->withJson($result);
+         } else {
+            return $response->withJson(['error_code' => -0x02002, 'message' => 'Несуществующий идентификатор команды.'], StatusCode::HTTP_NOT_FOUND);
          }
-         else
-         {
-            return $response->withJson(['error_code' => -0x03002, 'message' => 'Несуществующий идентификатор команды.'], StatusCode::HTTP_NOT_FOUND);
-         }
-      }
-      catch (PDOException $e)
-      {
+      } catch (PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
       }
    }
@@ -275,43 +301,21 @@ function get_commands(Request $request, Response $response, $args)
    return $response;
 }
 
-function get_rows($select, $param_values = [])
-{
-   $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
-   $query = $connect->prepare($select);
+function get_pictures(Request $request, Response $response) {
+   $version = get_version($request);
+   $response = check_version($version, $response);
+   
+   if ($response->isClientError()) return $response;
 
-   // получение всех параметров запоса вида ':параметр'
-   preg_match_all('/(?<!:):([a-zA-Z]{1}[a-zA-Z_0-9]*)/', $select, $param_names, PREG_SET_ORDER);
-
-   foreach ($param_names as $name) 
-   {
-       $param_type = array_key_exists($name[1], $param_values) ? PDO::PARAM_STR : PDO::PARAM_NULL;
-       $query->bindParam($name[0], $param_values[$name[1]], $param_type);
-   }
-
-   $query->execute();
-   $total_rows = $query->rowCount();
-   $rows = $query->fetchAll();
-
-   $data = [ 'total_rows' => $total_rows, 'rows' => $rows ];
-   return $data;
-}
-
-function get_pictures(Request $request, Response $response)
-{
    $params = $request->getQueryParams();
    $response = check_token($params, $response);
-   if ($response->getStatusCode() == StatusCode::HTTP_OK)
-   {
-      try
-      {
+   if ($response->isOk()) {
+      try {
          $rows = get_rows("select * from picture_select() where parent_id = get_constant('picture.status')::uuid");
          update_expired_time();
 
          return $response->withJson($rows);
-      }
-      catch (PDOException $e)
-      {
+      } catch (PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
       }
    }
@@ -319,43 +323,38 @@ function get_pictures(Request $request, Response $response)
    return $response;
 }
 
-function add_group(Request $request, Response $response)
-{
+function add_group(Request $request, Response $response) {
+   $version = get_version($request);
+   $response = check_version($version, $response);
+   
+   if ($response->isClientError()) return $response;
+
    $params = $request->getParsedBody();
    $response = check_token($params, $response);
-   if ($response->getStatusCode() == StatusCode::HTTP_OK)
-   {
+   if ($response->isOk()) {
       $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
       $query = $connect->prepare('select * from group_create(:kind, :code, :name, :parent)');
 	   $query->bindParam(':kind', $params['kind']);
       $query->bindParam(':code', $params['code']);
       $query->bindParam(':name', $params['name']);
       $type = PDO::PARAM_NULL;
-      if (array_key_exists('parent', $params))
-      {
-         if ($params['parent'] !== 'top')
-         {
+      if (array_key_exists('parent', $params)) {
+         if ($params['parent'] !== 'top') {
             $type = PDO::PARAM_STR;
          }
       }
 
       $query->bindParam(':parent', $params['parent'], $type);
 
-      try
-      {
+      try {
          $query->execute();
          $result = $query->fetch();
-         if ($result)
-         {
+         if ($result) {
             return $response->withJson($result, StatusCode::HTTP_CREATED);
+         } else {
+            return $response->withJson(['error_code' => -0x02010, 'message' => 'Ошибка при создании группы.'], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
          }
-         else
-         {
-            return $response->withJson(['error_code' => -0x04000, 'message' => 'Ошибка при создании группы.'], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
-         }
-      }
-      catch (PDOException $e)
-      {
+      } catch (PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
       }
    }
@@ -363,33 +362,30 @@ function add_group(Request $request, Response $response)
    return $response;
 }
 
-function update_group(Request $request, Response $response, $args)
-{
+function update_group(Request $request, Response $response, $args) {
+   $version = get_version($request);
+   $response = check_version($version, $response);
+   
+   if ($response->isClientError()) return $response;
+
    $params = $request->getParsedBody();
    $response = check_token($params, $response);
-   if ($response->getStatusCode() == StatusCode::HTTP_OK)
-   {
+   if ($response->isOk()) {
       $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
       $query = $connect->prepare('select * from group_update(:id, :code, :name)');
 	   $query->bindParam(':id', $args['id']);
       $query->bindParam(':code', $params['code']);
       $query->bindParam(':name', $params['name']);
 
-      try
-      {
+      try {
          $query->execute();
          $result = $query->fetch();
-         if ($result)
-         {
+         if ($result) {
             return $response->withJson($result, StatusCode::HTTP_OK);
+         } else {
+            return $response->withJson(['error_code' => -0x02011, 'message' => 'Ошибка при обновлении группы.'], StatusCode::HTTP_NO_CONTENT);
          }
-         else
-         {
-            return $response->withJson(['error_code' => -0x04001, 'message' => 'Ошибка при обновлении группы.'], StatusCode::HTTP_NO_CONTENT);
-         }
-      }
-      catch (PDOException $e)
-      {
+      } catch (PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
       }
    }
@@ -397,23 +393,23 @@ function update_group(Request $request, Response $response, $args)
    return $response;
 }
 
-function delete_group(Request $request, Response $response, $args)
-{
+function delete_group(Request $request, Response $response, $args) {
+   $version = get_version($request);
+   $response = check_version($version, $response);
+   
+   if ($response->isClientError()) return $response;
+
    $params = $request->getQueryParams();
    $response = check_token($params, $response);
-   if ($response->getStatusCode() == StatusCode::HTTP_OK)
-   {
+   if ($response->isOk()) {
       $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
       $query = $connect->prepare('select * from group_delete(:id)');
 	   $query->bindParam(':id', $args['id']);
 
-      try
-      {
+      try {
          $query->execute();
          return $response->withJson([], StatusCode::HTTP_NO_CONTENT);
-      }
-      catch (PDOException $e)
-      {
+      } catch (PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
       }
    }
