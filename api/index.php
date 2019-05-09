@@ -1,11 +1,12 @@
 <?php
 // Copyright © 2018-2019 Тепляшин Сергей Васильевич. Contacts: <sergio.teplyashin@gmail.com>
 // License: https://opensource.org/licenses/GPL-3.0
-session_start();
 
 use \Psr\Http\Message\ServerRequestInterface as Request;
 use \Psr\Http\Message\ResponseInterface as Response;
 use \Slim\Http\StatusCode as StatusCode;
+use \Firebase\JWT\JWT;
+use \Tuupola\Middleware\JwtAuthentication;
 
 require '../vendor/autoload.php';
 require 'db.php';
@@ -42,7 +43,25 @@ $app->map(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], '/{routes:.+}', function($r
    return $handler($req, $res);
 });
 
+$app->add(new JwtAuthentication([
+   "secret" => "08ne/Eq3-U1DSM*GvpULrBiGtU*G_+7B!@mO9%@Y",
+   "secure" => false
+]));
+
 $app->run();
+
+function create_token($user, $password)
+{
+   $expire = strtotime('+1 day');
+
+   $token = [
+      'exp' => $expire,        // время жизни токена
+      'user' => $user,         // имя пользователя postgresql
+      'password' => $password  // пароль пользователя postgresql
+   ];
+
+   return JWT::encode($token, 'W09mjyOHBs');
+}
 
 function get_version(Request $request) {
    $accept = strtolower(str_replace(' ', '', $request->getHeaderLine('Accept')));
@@ -57,10 +76,6 @@ function get_version(Request $request) {
    }
 
    return 0;
-}
-
-function update_expired_time() {
-   $_SESSION['time_expired'] = strtotime('+1 day');
 }
 
 function array_select($menu, $parent_id) {
@@ -90,24 +105,22 @@ function generate_menu($menu, $parent_id  = null) {
 	return $result;
 }
 
-function check_token($params, Response $response) {
-   if (array_key_exists('token', $params)) {
-      if ($_SESSION['token'] !== $params['token']) {
-         return $response->withJson(['error_code' => -0x01200, 'message' => 'Указан неверный идентификатор пользователя'], StatusCode::HTTP_UNAUTHORIZED);
+function check_token(Request $request, Response $response) {
+   if ($request->hasHeader('Authorization')) {
+      $auth = $request->getHeaderLine('Authorization');
+      list($jwt) = sscanf($auth, 'Bearer %s');
+      $token = JWT::decode($jwt, 'W09mjyOHBs', ['HS256']);
+
+      if (time() > $token['exp']) {
+         return $response->withJson(['error_code' => -0x01201, 'message' => 'Истекло время жизни токена.'], StatusCode::HTTP_UNAUTHORIZED);
       }
 
-      if (time() > $_SESSION['time_expired']) {
-         return $response->withJson(['error_code' => -0x01201, 'message' => 'Вас слишком долго не было. Сессия была закрыта.'], StatusCode::HTTP_UNAUTHORIZED);
-      }
-
-      return $response;
+   } else {
+      return $response->withJson(['error_code' => -0x01202, 'message' => 'для выполнения запроса необходима авторизация пользователя.'], StatusCode::HTTP_UNAUTHORIZED);
    }
-
-   return $response->withJson(['error_code' => -0x01202, 'message' => 'Запрос требует указания идентификатора пользователя.'], StatusCode::HTTP_UNAUTHORIZED);
 }
 
-function check_version($version, Response $response)
-{
+function check_version($version, Response $response) {
    if ($version == 0) {
       return $response->withJson(['error_code' => -0x1100, 'message' => 'Необходимо указать версию API.'], StatusCode::HTTP_BAD_REQUEST);
    }
@@ -178,12 +191,9 @@ function login_user(Request $request, Response $response) {
          $query = $connect->prepare('select login()');
          $query->execute();
  
-         $_SESSION['user'] = $user;
-         $_SESSION['password'] = $params['password'];
-         $_SESSION['token'] = md5(uniqid($user, true));
-         update_expired_time();
+         $jwt = create_token($user, $params['password']);
 
-         return $response->withJson(['token' => $_SESSION['token']]);
+         return $response->withJson(['token' => $jwt]);
       } else {
          return $response->withJson(['error_code' => -0x01000, 'message' => 'Пользователь ' . $params['username'] . ' не зарегестрирован.'], StatusCode::HTTP_BAD_REQUEST);
       }
@@ -199,18 +209,15 @@ function logout_user(Request $request, Response $response) {
    if ($response->isClientError()) return $response;
 
    $params = $request->getQueryParams();
-   $response = check_token($params, $response);
+   $response = check_token($request, $response);
+
    if ($response->isOk()) {
-      $connect = (new Db(array("user" => $user, "password" => $params['password'])))->getConnect();
+      $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
       
       $query = $connect->prepare('select logout()');
 
       try {
          $query->execute();
-         unset($_SESSION['user']);
-         unset($_SESSION['password']);
-         unset($_SESSION['token']);
-         unset($_SESSION['time_expired']);
       } catch (PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
       }
@@ -226,16 +233,15 @@ function get_menu(Request $request, Response $response) {
    if ($response->isClientError()) return $response;
 
    $params = $request->getQueryParams();
-   $response = check_token($params, $response);
+   $response = check_token($request, $response);
+   
    if ($response->isOk()) {
       try {
          $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
          $query = $connect->prepare('select * from select_menu()');
-	      $query->execute();
+   	   $query->execute();
 	
          $menu = $query->fetchAll();
-
-         update_expired_time();
 
          return $response->withJson(generate_menu($menu));
       } catch (PDOException $e) {
@@ -253,7 +259,8 @@ function get_commands(Request $request, Response $response, $args) {
    if ($response->isClientError()) return $response;
 
    $params = $request->getQueryParams();
-   $response = check_token($params, $response);
+   $response = check_token($request, $response);
+
    if ($response->isOk()) {
       if (!array_key_exists('type', $params)) {
          return $response->withJson(['error_code' => -0x02000, 'message' => 'не указан тип команды.'], StatusCode::HTTP_NOT_FOUND);
@@ -308,12 +315,11 @@ function get_pictures(Request $request, Response $response) {
    if ($response->isClientError()) return $response;
 
    $params = $request->getQueryParams();
-   $response = check_token($params, $response);
+   $response = check_token($request, $response);
+
    if ($response->isOk()) {
       try {
          $rows = get_rows("select * from picture_select() where parent_id = get_constant('picture.status')::uuid");
-         update_expired_time();
-
          return $response->withJson($rows);
       } catch (PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage()], StatusCode::HTTP_INTERNAL_SERVER_ERROR);
@@ -330,7 +336,8 @@ function add_group(Request $request, Response $response) {
    if ($response->isClientError()) return $response;
 
    $params = $request->getParsedBody();
-   $response = check_token($params, $response);
+   $response = check_token($request, $response);
+
    if ($response->isOk()) {
       $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
       $query = $connect->prepare('select * from group_create(:kind, :code, :name, :parent)');
@@ -369,7 +376,8 @@ function update_group(Request $request, Response $response, $args) {
    if ($response->isClientError()) return $response;
 
    $params = $request->getParsedBody();
-   $response = check_token($params, $response);
+   $response = check_token($request, $response);
+
    if ($response->isOk()) {
       $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
       $query = $connect->prepare('select * from group_update(:id, :code, :name)');
@@ -400,7 +408,8 @@ function delete_group(Request $request, Response $response, $args) {
    if ($response->isClientError()) return $response;
 
    $params = $request->getQueryParams();
-   $response = check_token($params, $response);
+   $response = check_token($request, $response);
+
    if ($response->isOk()) {
       $connect = (new Db(array("user" => $_SESSION['user'], "password" => $_SESSION['password'])))->getConnect();
       $query = $connect->prepare('select * from group_delete(:id)');
