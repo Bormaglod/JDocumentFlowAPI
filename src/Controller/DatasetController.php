@@ -20,19 +20,37 @@ class DatasetController extends DatabaseController {
          $query = $this->getQuery($params);
          
          if ($this->isValidParam('show-deleted', $params)) {
-            $query->where('not deleted');
+            if (!array_search($params['show-deleted'], array('', 'true', "false"))) {
+               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр show-deleted должен иметь значение "true", "false" или пустая строка.']);
+            }
+
+            if ($params['show-deleted'] == 'true') {
+               $query->where('not deleted');
+            }
          }
    
          if ($this->isValidParam('offset', $params)) {
-            $query->offset($params['offset']);
+            if (is_numeric($params['offset'])) {
+               $query->offset($params['offset']);
+            }
+            else
+            {
+               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр offset должен быть целым числм.']);
+            }
          }
    
          if ($this->isValidParam('limit', $params)) {
-            $query->limit($params['limit']);
+            if (is_numeric($params['limit'])) {
+               $query->limit($params['limit']);
+            }
+            else
+            {
+               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр limit должен быть целым числм.']);
+            }
          }
 
          if ($this->isValidParam('order-by', $params)) {
-            $query->orderBy('code');
+            $query->orderBy($params);
          }
 
          $data = $connect->execute($query);
@@ -133,7 +151,7 @@ class DatasetController extends DatabaseController {
 
    function isValidParam(string $paramName, array $params) {
       if (array_key_exists($paramName, $params)) {
-         return !array_key_exists($paramName, $this->getIgnoreParams());
+         return !array_search($paramName, $this->getIgnoreParams());
       }
 
       return false;
