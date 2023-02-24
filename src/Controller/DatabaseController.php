@@ -31,8 +31,6 @@ class DatabaseController {
    const BAD_PARAMETER            = 604000;
    const UNKNOWN_ERROR            = 605000;
 
-   const SECRET_KEY = 'W09mjyOHBs';
-
    public function login(Request $request, Response $response, $args) {
       $version = $this->getVersion($request);
       if ($version == 0) {
@@ -49,7 +47,7 @@ class DatabaseController {
             $psw = '';
             switch ($user->www_name) {
                case 'www_user':
-                  $psw = 'QuaTunThyk';
+                  $psw = getenv('WWW_USER');
                   break;
             }
             
@@ -94,7 +92,7 @@ class DatabaseController {
          ]   
       ];
 
-      return JWT::encode($token, self::SECRET_KEY);
+      return JWT::encode($token, getenv('SECRET_KEY'));
    }
 
    protected function checkToken(Request $request) {
@@ -102,7 +100,7 @@ class DatabaseController {
          $auth = $request->getHeaderLine('Authorization');
          list($jwt) = sscanf($auth, 'Bearer %s');
          try {
-            $token = JWT::decode($jwt, self::SECRET_KEY, ['HS256']);
+            $token = JWT::decode($jwt, getenv('SECRET_KEY'), ['HS256']);
             return array('error_code' => 0, 'token' => $token);
          }
          catch (ExpiredException $e) {
@@ -135,7 +133,7 @@ class DatabaseController {
                $psw = '';
                switch ($user->www_name) {
                   case 'www_user':
-                     $psw = 'QuaTunThyk';
+                     $psw = getenv('WWW_USER');
                      break;
                }
 

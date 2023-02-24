@@ -11,10 +11,6 @@ class PostgresConnection {
 
     private $pdo  = null;
 
-    private $host = 'localhost';
-    private $db   = 'erp_autokom';
-    private $port = 5432;
-
     public static function __callStatic($name, $args) {
         if ($name == 'get') {
             
@@ -177,7 +173,10 @@ class PostgresConnection {
     }
 
     private function createConnect($user_name, $password) {
-        $dsn = "pgsql:host=$this->host;dbname=$this->db;port=$this->port";
+        $dsn = 'pgsql' .
+               ':host=' . getenv('DB_HOST') .
+               ';dbname=' . getenv('DB_NAME') .
+               ';port=' . getenv('DB_PORT');
         $opt = array(
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,

@@ -50,7 +50,7 @@ class DatasetController extends DatabaseController {
          }
 
          if ($this->isValidParam('order-by', $params)) {
-            $query->orderBy($params);
+            $query->orderBy($params['order-by']);
          }
 
          $data = $connect->execute($query);

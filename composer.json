@@ -5,7 +5,8 @@
         "slim/middleware": "^1.0",
         "slim/http": "1.3",
         "nyholm/psr7": "^1.5",
-        "nyholm/psr7-server": "^1.0"
+        "nyholm/psr7-server": "^1.0",
+        "vlucas/phpdotenv": "^5.5"
     },
     "autoload": {
         "psr-4": {

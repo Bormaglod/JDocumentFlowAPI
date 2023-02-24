@@ -9,6 +9,7 @@ use Slim\Exception\HttpNotFoundException;
 use Tuupola\Middleware\JwtAuthentication;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Slim\Factory\Psr17\SlimHttpPsr17Factory;
+use DotEnv\DotEnv;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -20,6 +21,7 @@ $app = AppFactory::create(
 );
 
 require __DIR__ . '/../app/routes.php';
+require __DIR__ . '/../app/env.php';
 
 $app->options('/{routes:.+}', function ($request, $response, $args) {
    return $response;
@@ -34,7 +36,7 @@ $app->add(function ($request, $handler) {
 });
 
 $app->add(new JwtAuthentication([
-   "secret" => "W09mjyOHBs",
+   "secret" => getenv('SECRET_KEY'),
    "secure" => false,
    "ignore" => [
       '/login'
