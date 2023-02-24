@@ -21,7 +21,7 @@ class DatasetController extends DatabaseController {
          
          if ($this->isValidParam('show-deleted', $params)) {
             if (!array_search($params['show-deleted'], array('', 'true', "false"))) {
-               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр show-deleted должен иметь значение "true", "false" или пустая строка.']);
+               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр show-deleted должен иметь значение "true", "false" или пустая строка.'], self::HTTP_BAD_REQUEST);
             }
 
             if ($params['show-deleted'] == 'true') {
@@ -35,7 +35,7 @@ class DatasetController extends DatabaseController {
             }
             else
             {
-               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр offset должен быть целым числм.']);
+               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр offset должен быть целым числм.'], self::HTTP_BAD_REQUEST);
             }
          }
    
@@ -45,7 +45,7 @@ class DatasetController extends DatabaseController {
             }
             else
             {
-               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр limit должен быть целым числм.']);
+               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр limit должен быть целым числм.'], self::HTTP_BAD_REQUEST);
             }
          }
 
@@ -134,11 +134,18 @@ class DatasetController extends DatabaseController {
       try {
          $connect = PostgresConnection::get($this->checkAccess($request));
          $params = $request->getParams();
-         if (array_key_exists('wipe', $params)) {
-            $connect->wipe($this->getEntityName(), $args['id']);
-         }
-         else {
-            $connect->delete($this->getEntityName(), $args['id']);
+
+         if ($this->isValidParam('wipe', $params)) {
+            if (!array_search($params['wipe'], array('', 'true', "false"))) {
+               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр wipe должен иметь значение "true", "false" или пустая строка.'], self::HTTP_BAD_REQUEST);
+            }
+
+            if ($params['wipe'] == 'true') {
+               $connect->wipe($this->getEntityName(), $args['id']);
+            }
+            else {
+               $connect->delete($this->getEntityName(), $args['id']);
+            }
          }
    
          return $response->withStatus(self::HTTP_NO_CONTENT);
