@@ -11,7 +11,7 @@ use App\Controller\DatabaseController as Database;
 use App\Controller\UsersController as Users;
 use App\Controller\MeasurementController as Measurement;
 use App\Controller\OkopfController as Okopf;
-//use App\Controller\GoodsController as Goods;
+use App\Controller\MaterialController as Material;
 
 $app->post('/login', Database::class . ':login');
 
@@ -38,6 +38,9 @@ $app->group('/okopf', function (Group $group) {
    $group->delete('/{id}', Okopf::class . ':delete');
 });
 
+$app->group('/materials', function (Group $group) {
+   $group->get('', Material::class . ':get');
+});
 /*$app->group('/goods', function (Group $group) {
    $group->get('', Goods::class . ':get');
    $group->get('/{id}', Goods::class . ':getById');

@@ -14,18 +14,27 @@ class OkopfController extends DatasetController {
       return $this->name;
    }
 
-   protected function getQuery(array $params) {
+   /*protected function getQuery(array $params) {
       return (new QueryBuilder())
+         ->select('id', 'code', 'item_name')
+         ->from($this->name);
+   }*/
+   protected function createQuery(QueryBuilder $query, array $params) {
+      if ($this->isValidParam('include', $params)) {
+         throw new BadParameterException('An endpoint does not support the include parameter.');
+      }
+      
+      return $query
          ->select('id', 'code', 'item_name')
          ->from($this->name);
    }
 
-   protected function getQueryById(array $params) {
+   /*protected function getQueryById(array $params) {
       return (new QueryBuilder())
          ->select('id', 'code', 'item_name')
          ->from($this->name)
          ->where('id = :id');
-   }
+   }*/
 
    protected function getFields() {
       return ['code', 'name'];

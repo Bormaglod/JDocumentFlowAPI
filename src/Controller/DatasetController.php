@@ -11,21 +11,23 @@ use App\Exception\AccessException;
 use App\Exception\VersionException;
 use App\Exception\NotImplementedException;
 use App\Exception\BadParameterException;
+use App\Query\QueryBuilder;
 
 class DatasetController extends DatabaseController {
    public function get(Request $request, Response $response, $args) {
       try {
          $connect = PostgresConnection::get($this->checkAccess($request));
          $params = $request->getParams();
-         $query = $this->getQuery($params);
+
+         $query = new QueryBuilder();
+         //$query = $this->getQuery($params);
+         $this->createQuery($query, $params);
          
          if ($this->isValidParam('show-deleted', $params)) {
-            if (!array_search($params['show-deleted'], array('', 'true', "false"))) {
-               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр show-deleted должен иметь значение "true", "false" или пустая строка.'], self::HTTP_BAD_REQUEST);
-            }
+            $this->checkBoolParam('show-deleted', $params);
 
             if ($params['show-deleted'] == 'true') {
-               $query->where('not deleted');
+               $query->where("not {$query->getAlias()}.deleted");
             }
          }
    
@@ -35,7 +37,7 @@ class DatasetController extends DatabaseController {
             }
             else
             {
-               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр offset должен быть целым числм.'], self::HTTP_BAD_REQUEST);
+               throw new BadParameterException('Параметр offset должен быть целым числом.');
             }
          }
    
@@ -45,7 +47,7 @@ class DatasetController extends DatabaseController {
             }
             else
             {
-               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр limit должен быть целым числм.'], self::HTTP_BAD_REQUEST);
+               throw new BadParameterException('Параметр limit должен быть целым числом.');
             }
          }
 
@@ -55,7 +57,7 @@ class DatasetController extends DatabaseController {
 
          $data = $connect->execute($query);
 
-         return $response->withJson($data);
+         return $response->withJson($this->getFormattedData($data));
       } catch (\PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
       } catch (AccessException | VersionException | BadParameterException $e) {
@@ -66,14 +68,18 @@ class DatasetController extends DatabaseController {
    function getById(Request $request, Response $response, $args) {
       try {
          $connect = PostgresConnection::get($this->checkAccess($request));
-         $query = $this->getQueryById($request->getParams());
+         
+         //$query = $this->getQueryById($request->getParams());
+         $query = new QueryBuilder();
+         $this->createQueryById($query, $request->getParams());
+
          $data = $connect->execute($query, $args);
    
          if ($data['total_rows'] == 0) {
             return $response->withJson(['error_code' => self::OBJECT_NOT_EXISTS, 'message' => 'Объект с таким id не существует.'], self::HTTP_NOT_FOUND);
          }
    
-         return $response->withJson($data);
+         return $response->withJson($this->getFormattedData($data));
       } catch (\PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
       } catch (AccessException | VersionException $e) {
@@ -122,7 +128,7 @@ class DatasetController extends DatabaseController {
          $query = $this->getQueryById($request->getParams());
          $data = $connect->execute($query, $args);
 
-         return $response->withJson($data);
+         return $response->withJson($this->getFormattedData($data));
       } catch (\PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
       } catch (AccessException | VersionException $e) {
@@ -156,7 +162,39 @@ class DatasetController extends DatabaseController {
       }
    }
 
-   function isValidParam(string $paramName, array $params) {
+   protected function getFormattedData($source) {
+      $meta = [ 'total_rows' => $source['total_rows']];
+      $data = [];
+      foreach ($source['rows'] as $row) {
+         $baseAttrs = $this->getBaseAttributes($row);
+         //$data[] = [ 
+         $newData = [
+            'type' => $this->getApiName(), 
+            'id' => $row['id'], 
+            'attributes' => array_filter($baseAttrs, function($x) { return $x != 'id'; }, ARRAY_FILTER_USE_KEY),
+            'links' => [ 'self' => 'http://' . gethostname() . ':8081/' . $this->getApiName() . '/' . $baseAttrs['id']]
+         ];
+
+         $rels = $this->getRelations($row);
+         if ($rels !== []) {
+            $newData['relationships'] = $rels['rel_name'];
+         }
+
+         $data[] = $newData;
+      }
+
+      return [ 'meta' => $meta, 'data' => $data ];
+   }
+
+   protected function getBaseAttributes(array $row): array {
+      return $row;
+   }
+
+   protected function getRelations(array $row): array {
+      return [];
+   }
+
+   protected function isValidParam(string $paramName, array $params) {
       if (array_key_exists($paramName, $params)) {
          return !array_search($paramName, $this->getIgnoreParams());
       }
@@ -164,17 +202,36 @@ class DatasetController extends DatabaseController {
       return false;
    }
 
+   protected function checkBoolParam(string $paramName, array $params) {
+      if (!array_search($params[$paramName], array('', 'true', "false"))) {
+         throw new BadParameterException(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр '.$paramName.' должен иметь значение "true", "false" или пустая строка.'], self::HTTP_BAD_REQUEST);
+      }
+   }
+
    protected function getEntityName() {
       throw new NotImplementedException('Функция getEntityName() не реализована.');
    }
 
-   protected function getQuery(array $params) {
-      throw new NotImplementedException('Функция getQuery() не реализована.');
+   protected function getApiName() {
+      return $this->getEntityName();
    }
 
-   protected function getQueryById(array $params) {
-      throw new NotImplementedException('Функция getQueryById() не реализована.');
+   /*protected function getQuery(array $params) {
+      throw new NotImplementedException('Функция getQuery() не реализована.');
+   }*/
+
+   protected function createQuery(QueryBuilder $query, array $params) {
+      throw new NotImplementedException('Функция createQuery() не реализована.');
    }
+
+   protected function createQueryById(QueryBuilder $query, array $params) {
+      $this->createQuery($query, $params)
+         ->where("{$query->getAlias()}.id = :id");
+   }
+
+   /*protected function getQueryById(array $params) {
+      throw new NotImplementedException('Функция getQueryById() не реализована.');
+   }*/
 
    protected function getFields() {
       throw new NotImplementedException('Функция getFields() не реализована.');

@@ -101,7 +101,7 @@ class DatabaseController {
          list($jwt) = sscanf($auth, 'Bearer %s');
          try {
             $token = JWT::decode($jwt, getenv('SECRET_KEY'), ['HS256']);
-            return array('error_code' => 0, 'token' => $token);
+            //return array('error_code' => 0, 'token' => $token);
          }
          catch (ExpiredException $e) {
             return array('error_code' => self::TOKEN_LIFETIME_EXPIRED, 'message' => 'Истекло время жизни токена.');
@@ -124,32 +124,29 @@ class DatabaseController {
     
       $access = $this->checkToken($request);
       if ($access) {
-         if ($access['error_code'] == 0) {
+         throw new AccessException($access['message'], $access['error_code']);
+      }
+      else {
+         $decoded = $request->getAttribute('token');
 
-            $sql = 'select www_name, www_password from user_alias where id = :id';
-            $user = PostgresConnection::get('guest', 'guest')->getRow($sql, ['id' => $access['token']->user->id]);
+         $sql = 'select www_name, www_password from user_alias where id = :id';
+         $user = PostgresConnection::get('guest', 'guest')->getRow($sql, ['id' => $decoded['user']->id]);
 
-            if ($user) {
-               $psw = '';
-               switch ($user->www_name) {
-                  case 'www_user':
-                     $psw = getenv('WWW_USER');
-                     break;
-               }
-
-               return array('user_name' => $user->www_name, 'password' => $psw);
+         if ($user) {
+            $psw = '';
+            switch ($user->www_name) {
+               case 'www_user':
+                  $psw = getenv('WWW_USER');
+                  break;
             }
-            else
-            {
-               throw new AccessException('Invalid token.', self::INVALID_TOKEN);
-            }
+
+            return array('user_name' => $user->www_name, 'password' => $psw);
          }
-         else {
-            throw new AccessException($access['message'], $access['error_code']);
+         else
+         {
+            throw new AccessException('Invalid token.', self::INVALID_TOKEN);
          }
       }
-   
-      throw new CustomException("checkToken не вернул значение.", self::UNKNOWN_ERROR);
    }
 
    protected function getExtendErrors($exception) {

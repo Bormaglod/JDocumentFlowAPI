@@ -9,23 +9,37 @@ use App\Query\QueryBuilder;
 
 class MeasurementController extends DatasetController {
    private $name = 'measurement';
+   private $apiName = 'measurements';
 
    protected function getEntityName() {
       return $this->name;
    }
 
-   protected function getQuery(array $params) {
+   protected function getApiName() {
+      return $this->apiName;
+   }
+
+   /*protected function getQuery(array $params) {
       return (new QueryBuilder())
+         ->select('id', 'code', 'item_name', 'abbreviation')
+         ->from($this->name);
+   }*/
+   protected function createQuery(QueryBuilder $query, array $params) {
+      if ($this->isValidParam('include', $params)) {
+         throw new BadParameterException('An endpoint does not support the include parameter.');
+      }
+      
+      return $query
          ->select('id', 'code', 'item_name', 'abbreviation')
          ->from($this->name);
    }
 
-   protected function getQueryById(array $params) {
+   /*protected function getQueryById(array $params) {
       return (new QueryBuilder())
          ->select('id', 'code', 'item_name', 'abbreviation')
          ->from($this->name)
          ->where('id = :id');
-   }
+   }*/
 
    protected function getFields() {
       return ['code', 'item_name', 'abbreviation'];

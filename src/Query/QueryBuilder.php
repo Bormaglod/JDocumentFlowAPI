@@ -8,28 +8,39 @@ class QueryBuilder
 {
     private $fields = [];
     private $conditions = [];
-    private $from = [];
+    private $from = null;
+    private $fromAlias = null;
     private $offset = null;
     private $limit = null;
     private $orders = [];
+    private $joins = [];
+    private $unionQuery = null;
+    private $withs = [];
+
+    public function __call($name, $args) {
+        if ($name == 'leftJoin') {
+            switch (count($args)) {
+                case 2:
+                    return call_user_func_array(array($this, 'leftJoinCondition'), $args);
+                case 3:
+                    return call_user_func_array(array($this, 'leftJoinFields'), $args);
+            }
+        }
+    }
 
     public function __toString(): string
     {
-        $where = $this->conditions === [] ? '' : ' WHERE ' . implode(' AND ', $this->conditions);
-        $off = is_null($this->offset) ? '' : ' OFFSET ' . $this->offset;
-        $lim = is_null($this->limit) ? '' : ' LIMIT ' . $this->limit;
-        $order = $this->orders === [] ? '' : ' ORDER BY ' . implode(', ', $this->orders);
-        return 'SELECT ' . implode(', ', $this->fields)
-            . ' FROM ' . implode(', ', $this->from)
-            . $where
-            . $order
-            . $off
-            . $lim;
+        return $this->getQueryString();
+    }
+
+    public function getAlias()
+    {
+        return $this->fromAlias;
     }
 
     public function select(string ...$select): self
     {
-        $this->fields = $select;
+        $this->fields = array_merge($this->fields, $select);
         return $this;
     }
 
@@ -45,9 +56,11 @@ class QueryBuilder
     public function from(string $table, ?string $alias = null): self
     {
         if ($alias === null) {
-            $this->from[] = $table;
+            $this->from = $table;
+            $this->fromAlias = $table;
         } else {
-            $this->from[] = "${table} AS ${alias}";
+            $this->from = "${table} AS ${alias}";
+            $this->fromAlias = $alias;
         }
 
         return $this;
@@ -72,6 +85,64 @@ class QueryBuilder
         }
 
         return $this;
+    }
+
+    private function leftJoinCondition(string $table, string $cond): self
+    {
+        $this->joins[] = "LEFT JOIN $table ON $cond";
+        return $this;
+    }
+
+    private function leftJoinFields(string $table, string $left, string $right): self
+    {
+        $this->joins[] = "LEFT JOIN $table ON $left = $right";
+        return $this;
+    }
+
+    public function innerJoin(string $table, string $cond): self
+    {
+        $this->joins[] = 'JOIN ' . $table . ' ON ' . $cond;
+        return $this;
+    }
+
+    public function unionAll(QueryBuilder $query): self 
+    {
+        $this->unionQuery = $query;
+        return $this;
+    }
+
+    public function with(QueryBuilder $query, string $alias, bool $recursive = false): self
+    {
+        $this->withs[] = array('query' => $query, 'alias' => $alias, 'recursive' => $recursive);
+        return $this;
+    }
+
+    private function getQueryString() {
+        $where = $this->conditions === [] ? '' : ' WHERE ' . implode(' AND ', $this->conditions);
+        $off = is_null($this->offset) ? '' : ' OFFSET ' . $this->offset;
+        $lim = is_null($this->limit) ? '' : ' LIMIT ' . $this->limit;
+        $order = $this->orders === [] ? '' : ' ORDER BY ' . implode(', ', $this->orders);
+        $join = $this->joins === [] ? '' : ' ' . implode(' ', $this->joins);
+        $union = is_null($this->unionQuery) ? '' : ' UNION ALL ' . $this->unionQuery;
+
+        $with = '';
+        if (count($this->withs) > 0) {
+            $with = 'WITH';
+            foreach ($this->withs as $w) {
+                $rec = $w['recursive'] ? ' RECURSIVE ' : ' ';
+                $with = $with . $rec . $w['alias'] . ' AS (' . $w['query'] . ')';
+            }
+        }
+
+        return $with 
+            . 'SELECT ' . implode(', ', $this->fields)
+            . ' FROM ' . $this->from
+            . $join
+            . $where
+            . $order
+            . $off
+            . $lim
+            . $union;
     }
 }
 

@@ -10,6 +10,8 @@ use Tuupola\Middleware\JwtAuthentication;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Slim\Factory\Psr17\SlimHttpPsr17Factory;
 use DotEnv\DotEnv;
+use Monolog\Logger;
+use Monolog\Handler\RotatingFileHandler;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -35,9 +37,14 @@ $app->add(function ($request, $handler) {
             ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
 });
 
+$logger = new Logger("slim");
+$rotating = new RotatingFileHandler(__DIR__ . '/../logs/slim-debug.log', 0, Logger::DEBUG);
+$logger->pushHandler($rotating);
+
 $app->add(new JwtAuthentication([
    "secret" => getenv('SECRET_KEY'),
    "secure" => false,
+   "logger" => $logger,
    "ignore" => [
       '/login'
    ],
