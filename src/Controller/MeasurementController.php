@@ -8,22 +8,17 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Query\QueryBuilder;
 
 class MeasurementController extends DatasetController {
-   private $name = 'measurement';
-   private $apiName = 'measurements';
+   const NAME     = 'measurement';
+   const API_NAME = 'measurements';
 
    protected function getEntityName() {
-      return $this->name;
+      return self::NAME;
    }
 
    protected function getApiName() {
-      return $this->apiName;
+      return self::API_NAME;
    }
 
-   /*protected function getQuery(array $params) {
-      return (new QueryBuilder())
-         ->select('id', 'code', 'item_name', 'abbreviation')
-         ->from($this->name);
-   }*/
    protected function createQuery(QueryBuilder $query, array $params) {
       if ($this->isValidParam('include', $params)) {
          throw new BadParameterException('An endpoint does not support the include parameter.');
@@ -31,17 +26,10 @@ class MeasurementController extends DatasetController {
       
       return $query
          ->select('id', 'code', 'item_name', 'abbreviation')
-         ->from($this->name);
+         ->from(self::NAME);
    }
 
-   /*protected function getQueryById(array $params) {
-      return (new QueryBuilder())
-         ->select('id', 'code', 'item_name', 'abbreviation')
-         ->from($this->name)
-         ->where('id = :id');
-   }*/
-
-   protected function getFields() {
+   protected function getFields(): array {
       return ['code', 'item_name', 'abbreviation'];
    }
 }

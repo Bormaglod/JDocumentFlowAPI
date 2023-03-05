@@ -63,7 +63,7 @@ class PostgresConnection {
         $query->execute();
 
         $total_rows = $query->rowCount();
-        $rows = $query->fetchAll();
+        $rows = $query->fetchAll(PDO::FETCH_NAMED);
 
         $data = [ 'total_rows' => $total_rows, 'rows' => $rows ];
 
@@ -72,8 +72,8 @@ class PostgresConnection {
 
     public function insert($entity, $args = null) {
         if ($args and count($args) > 0) {
-            $fields = array();
-            $values = array();
+            $fields = [];
+            $values = [];
             foreach ($args as $key => $value) {
                 $fields[] = $key;
                 $values[] = ':'.$key;
@@ -82,14 +82,14 @@ class PostgresConnection {
             $str_fields = implode(',', $fields);
             $str_values = implode(',', $values);
 
-            $sql = "insert into {$entity} ({$str_fields}) values ({$str_values}) returning id";
+            $sql = "insert into $entity ($str_fields) values ($str_values) returning id";
             $query = $this->pdo->prepare($sql);
 
             foreach ($args as $key => $value) {
                 $query->bindValue(':'.$key, $value);
             }
         } else {
-            $query = $this->pdo->prepare("insert into {$entity} default values returning id");
+            $query = $this->pdo->prepare("insert into $entity default values returning id");
         }
 
         $query->execute();
@@ -99,14 +99,14 @@ class PostgresConnection {
     }
 
     public function updateAll($entity, $id, $fields, $params) {
-        $set = array();
+        $set = [];
         foreach ($fields as $value) {
             $set[] = $value.'=:'.$value;
         }
 
         $str_set = implode(',', $set);
 
-        $sql = "update {$entity} set {$str_set} where id = :id";
+        $sql = "update $entity set $str_set where id = :id";
         $query = $this->pdo->prepare($sql);
 
         foreach ($params as $key => $value) {
@@ -126,7 +126,7 @@ class PostgresConnection {
 
         $str_set = implode(',', $set);
 
-        $sql = "update {$entity} set {$str_set} where id = :id";
+        $sql = "update $entity set $str_set where id = :id";
         $query = $this->pdo->prepare($sql);
 
         foreach ($params as $key => $value) {
@@ -139,7 +139,7 @@ class PostgresConnection {
     }
 
     public function delete($entity, $id) {
-        $sql = "update {$entity} set deleted = true where id = :id";
+        $sql = "update $entity set deleted = true where id = :id";
         $query = $this->pdo->prepare($sql);
 
         $query->bindValue(':id', $id);
@@ -147,7 +147,7 @@ class PostgresConnection {
     }
 
     public function wipe($entity, $id) {
-        $sql = "delete from {$entity} where id = :id";
+        $sql = "delete from $entity where id = :id";
         $query = $this->pdo->prepare($sql);
 
         $query->bindValue(':id', $id);

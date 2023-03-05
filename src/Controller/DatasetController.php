@@ -20,7 +20,6 @@ class DatasetController extends DatabaseController {
          $params = $request->getParams();
 
          $query = new QueryBuilder();
-         //$query = $this->getQuery($params);
          $this->createQuery($query, $params);
          
          if ($this->isValidParam('show-deleted', $params)) {
@@ -69,7 +68,6 @@ class DatasetController extends DatabaseController {
       try {
          $connect = PostgresConnection::get($this->checkAccess($request));
          
-         //$query = $this->getQueryById($request->getParams());
          $query = new QueryBuilder();
          $this->createQueryById($query, $request->getParams());
 
@@ -142,9 +140,7 @@ class DatasetController extends DatabaseController {
          $params = $request->getParams();
 
          if ($this->isValidParam('wipe', $params)) {
-            if (!array_search($params['wipe'], array('', 'true', "false"))) {
-               return $response->withJson(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр wipe должен иметь значение "true", "false" или пустая строка.'], self::HTTP_BAD_REQUEST);
-            }
+            $this->checkBoolParam('wipe', $params);
 
             if ($params['wipe'] == 'true') {
                $connect->wipe($this->getEntityName(), $args['id']);
@@ -164,26 +160,56 @@ class DatasetController extends DatabaseController {
 
    protected function getFormattedData($source) {
       $meta = [ 'total_rows' => $source['total_rows']];
+      $res = [ 'meta' => $meta ];
       $data = [];
+      $included = [];
       foreach ($source['rows'] as $row) {
-         $baseAttrs = $this->getBaseAttributes($row);
-         //$data[] = [ 
-         $newData = [
-            'type' => $this->getApiName(), 
-            'id' => $row['id'], 
-            'attributes' => array_filter($baseAttrs, function($x) { return $x != 'id'; }, ARRAY_FILTER_USE_KEY),
-            'links' => [ 'self' => 'http://' . gethostname() . ':8081/' . $this->getApiName() . '/' . $baseAttrs['id']]
-         ];
-
+         $newData = $this->getRowData($this->getApiName(), $this->getBaseAttributes($row));
          $rels = $this->getRelations($row);
          if ($rels !== []) {
             $newData['relationships'] = $rels['rel_name'];
+            $included[] = $this->getRowData($rels['api_name'], $rels['include']);
          }
 
          $data[] = $newData;
       }
 
-      return [ 'meta' => $meta, 'data' => $data ];
+      $res['data'] = $data;
+
+      if ($included !== []) {
+         $res['included'] = $included;
+      }
+
+      return $res;
+   }
+
+   private function getRowData(string $apiName, array $attrs): array {
+      return [
+         'type' => $apiName, 
+         'id' => $attrs['id'], 
+         'attributes' => array_filter($attrs, function($x) { return $x != 'id'; }, ARRAY_FILTER_USE_KEY),
+         'links' => [ 'self' => 'http://' . gethostname() . ':8081/' . $apiName . '/' . $attrs['id']]
+      ];
+   }
+
+   /*
+      Запрос SELECT может содержать повторяющиеся имена столбцов (например, при использовании JOIN).
+      В этом случае в массиве $row повторяющиеся столбцы будут объеденены в массив и записаны
+      в соответствующее поле. Функция возвращает одномерный массив, в котором повторяющееся поле 
+      будет содержать значение из вышеуказанного массива с индексом $index.
+   */
+   protected function getNormalRow(array $row, int $index): array {
+      $res = [];
+      foreach ($row as $column => $value) {
+         if (gettype($value) == 'array') {
+            $res[$column] = $value[$index];
+         }
+         else {
+            $res[$column] = $value;
+         }
+      }
+
+      return $res;
    }
 
    protected function getBaseAttributes(array $row): array {
@@ -204,7 +230,7 @@ class DatasetController extends DatabaseController {
 
    protected function checkBoolParam(string $paramName, array $params) {
       if (!array_search($params[$paramName], array('', 'true', "false"))) {
-         throw new BadParameterException(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => 'Параметр '.$paramName.' должен иметь значение "true", "false" или пустая строка.'], self::HTTP_BAD_REQUEST);
+         throw new BadParameterException(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => "Параметр $paramName должен иметь значение 'true', 'false' или пустая строка."], self::HTTP_BAD_REQUEST);
       }
    }
 
@@ -216,10 +242,6 @@ class DatasetController extends DatabaseController {
       return $this->getEntityName();
    }
 
-   /*protected function getQuery(array $params) {
-      throw new NotImplementedException('Функция getQuery() не реализована.');
-   }*/
-
    protected function createQuery(QueryBuilder $query, array $params) {
       throw new NotImplementedException('Функция createQuery() не реализована.');
    }
@@ -229,16 +251,16 @@ class DatasetController extends DatabaseController {
          ->where("{$query->getAlias()}.id = :id");
    }
 
-   /*protected function getQueryById(array $params) {
-      throw new NotImplementedException('Функция getQueryById() не реализована.');
-   }*/
-
-   protected function getFields() {
+   /*
+      Функция должна возвращать список полей подлежащих обновлению в операторе UPDATE.
+      Эти поля обязательно указывать в request.body
+   */
+   protected function getFields(): array {
       throw new NotImplementedException('Функция getFields() не реализована.');
    }
 
-   protected function getIgnoreParams() {
-      return array();
+   protected function getIgnoreParams(): array {
+      return [];
    }
 }
 

@@ -16,6 +16,7 @@ class QueryBuilder
     private $joins = [];
     private $unionQuery = null;
     private $withs = [];
+    private $groups = [];
 
     public function __call($name, $args) {
         if ($name == 'leftJoin') {
@@ -23,7 +24,12 @@ class QueryBuilder
                 case 2:
                     return call_user_func_array(array($this, 'leftJoinCondition'), $args);
                 case 3:
-                    return call_user_func_array(array($this, 'leftJoinFields'), $args);
+                    if (gettype($args[0]) == 'object' && get_class($args[0]) == 'App\Query\QueryBuilder' ) {
+                        return call_user_func_array(array($this, 'leftJoinQuery'), $args);
+                    }
+                    else {
+                        return call_user_func_array(array($this, 'leftJoinFields'), $args);
+                    }
             }
         }
     }
@@ -87,15 +93,30 @@ class QueryBuilder
         return $this;
     }
 
+    public function groupBy(string ...$groups): self
+    {
+        foreach ($groups as $arg) {
+            $this->groups[] = $arg;
+        }
+
+        return $this;
+    }
+
     private function leftJoinCondition(string $table, string $cond): self
     {
-        $this->joins[] = "LEFT JOIN $table ON $cond";
+        $this->joins[] = "LEFT JOIN $table ON ($cond)";
         return $this;
     }
 
     private function leftJoinFields(string $table, string $left, string $right): self
     {
-        $this->joins[] = "LEFT JOIN $table ON $left = $right";
+        $this->joins[] = "LEFT JOIN $table ON ($left = $right)";
+        return $this;
+    }
+
+    private function leftJoinQuery(QueryBuilder $query, string $alias, string $cond): self
+    {
+        $this->joins[] = "LEFT JOIN ($query) AS $alias ON ($cond)";
         return $this;
     }
 
@@ -124,6 +145,7 @@ class QueryBuilder
         $order = $this->orders === [] ? '' : ' ORDER BY ' . implode(', ', $this->orders);
         $join = $this->joins === [] ? '' : ' ' . implode(' ', $this->joins);
         $union = is_null($this->unionQuery) ? '' : ' UNION ALL ' . $this->unionQuery;
+        $groups = $this->groups === [] ? '' : ' GROUP BY ' . implode(', ', $this->groups);
 
         $with = '';
         if (count($this->withs) > 0) {
@@ -139,6 +161,7 @@ class QueryBuilder
             . ' FROM ' . $this->from
             . $join
             . $where
+            . $groups
             . $order
             . $off
             . $lim

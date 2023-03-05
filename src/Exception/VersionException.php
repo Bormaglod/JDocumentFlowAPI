@@ -4,10 +4,12 @@
 
 namespace App\Exception;
 
+use App\Controller\DatabaseController;
+
 class VersionException extends CustomException
 {
    public function getHttpCode() {
-      return 400;
+      return DatabaseController::HTTP_BAD_REQUEST;
    }
 }
 ?>

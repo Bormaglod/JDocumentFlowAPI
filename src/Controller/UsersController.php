@@ -8,17 +8,12 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Query\QueryBuilder;
 
 class UsersController extends DatasetController {
-   private $name = 'user_alias';
+   const NAME = 'user_alias';
 
    protected function getEntityName() {
-      return $this->name;
+      return self::NAME;
    }
-   /*protected function getQuery(array $params) {
-      return (new QueryBuilder())
-         ->select('id', 'name', 'surname', 'first_name', 'middle_name')
-         ->from('user_alias')
-         ->where('not is_system');
-   }*/
+
    protected function createQuery(QueryBuilder $query, array $params) {
       if ($this->isValidParam('include', $params)) {
          throw new BadParameterException('An endpoint does not support the include parameter.');
@@ -26,16 +21,9 @@ class UsersController extends DatasetController {
 
       return $query
          ->select('id', 'name', 'surname', 'first_name', 'middle_name')
-         ->from('user_alias')
+         ->from(self::NAME)
          ->where('not is_system');
    }
-
-   /*protected function getQueryById(array $params) {
-      return (new QueryBuilder())
-         ->select('id', 'name', 'surname', 'first_name', 'middle_name')
-         ->from('user_alias')
-         ->where('id = :id');
-   }*/
 
    protected function getIgnoreParams()
    {

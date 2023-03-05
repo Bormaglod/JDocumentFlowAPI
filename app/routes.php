@@ -12,6 +12,7 @@ use App\Controller\UsersController as Users;
 use App\Controller\MeasurementController as Measurement;
 use App\Controller\OkopfController as Okopf;
 use App\Controller\MaterialController as Material;
+use App\Controller\GoodsController as Goods;
 
 $app->post('/login', Database::class . ':login');
 
@@ -40,6 +41,12 @@ $app->group('/okopf', function (Group $group) {
 
 $app->group('/materials', function (Group $group) {
    $group->get('', Material::class . ':get');
+   $group->get('/{id}', Material::class . ':getById');
+});
+
+$app->group('/goods', function (Group $group) {
+   $group->get('', Goods::class . ':get');
+   $group->get('/{id}', Goods::class . ':getById');
 });
 /*$app->group('/goods', function (Group $group) {
    $group->get('', Goods::class . ':get');

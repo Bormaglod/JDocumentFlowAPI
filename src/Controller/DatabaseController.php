@@ -82,7 +82,7 @@ class DatabaseController {
 
    protected function createToken($id, $user_name)
    {
-      $expire = strtotime('+1 day');
+      $expire = strtotime('+1 month');
 
       $token = [
          'exp' => $expire,             // время жизни токена
@@ -101,7 +101,6 @@ class DatabaseController {
          list($jwt) = sscanf($auth, 'Bearer %s');
          try {
             $token = JWT::decode($jwt, getenv('SECRET_KEY'), ['HS256']);
-            //return array('error_code' => 0, 'token' => $token);
          }
          catch (ExpiredException $e) {
             return array('error_code' => self::TOKEN_LIFETIME_EXPIRED, 'message' => 'Истекло время жизни токена.');

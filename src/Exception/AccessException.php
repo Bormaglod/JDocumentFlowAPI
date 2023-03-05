@@ -4,10 +4,12 @@
 
 namespace App\Exception;
 
+use App\Controller\DatabaseController;
+
 class AccessException extends CustomException
 {
    public function getHttpCode() {
-      return 401;
+      return DatabaseController::HTTP_UNAUTHORIZED;
    }
 }
 

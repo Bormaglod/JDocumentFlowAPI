@@ -17,11 +17,6 @@ class DirectoryController extends DatasetController {
             $showFolders = $params['show-folders'] == 'true';
         }
 
-        /*$query = (new QueryBuilder())
-            ->select('p.id', 'p.code', 'p.item_name', 'p.is_folder', 'p.price', 'p.vat', 'p.measurement_id', 'p.weight', 'm.item_name as measurement_name')
-            ->from($this->getEntityName(), 'p')
-            ->leftJoin('measurement as m', 'm.id = p.measurement_id');*/
-
         if (!$showFolders) {
             $query->where("not {$query->getAlias()}.is_folder");
         }

@@ -5,6 +5,7 @@
 namespace App\Exception;
 
 use Exception;
+use App\Controller\DatabaseController;
 
 class CustomException extends Exception
 {
@@ -13,7 +14,7 @@ class CustomException extends Exception
    }
 
    public function getHttpCode() {
-      return 500;
+      return DatabaseController::HTTP_INTERNAL_SERVER_ERROR;
    }
 }
 ?>
