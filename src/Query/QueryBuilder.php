@@ -50,6 +50,12 @@ class QueryBuilder
         return $this;
     }
 
+    public function selectWithAlias(string ...$select): self
+    {
+        $this->fields = array_merge($this->fields, array_map(function($x) { return $this->getAlias() . '.' . $x; }, $select));
+        return $this;
+    }
+
     public function where(string ...$where): self
     {
         foreach ($where as $arg) {
@@ -87,7 +93,12 @@ class QueryBuilder
     public function orderBy(string ...$order): self
     {
         foreach ($order as $arg) {
-            $this->orders[] = $arg;
+            if (\str_contains($arg, '.')) {
+                $this->orders[] = $arg;
+            }
+            else {
+                $this->orders[] = "{$this->getAlias()}.$arg";
+            }
         }
 
         return $this;

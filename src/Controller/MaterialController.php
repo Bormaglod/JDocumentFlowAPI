@@ -31,6 +31,10 @@ class MaterialController extends ProductController {
             ->leftJoin($balance, 'mb', "mb.reference_id = {$query->getAlias()}.id");
         return $query;
     }
+
+    protected function getCountBaseAttributes(): int {
+        return parent::getCountBaseAttributes() + 3;
+    }
 }
 
 ?>

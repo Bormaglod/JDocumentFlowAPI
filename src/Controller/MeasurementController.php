@@ -20,10 +20,6 @@ class MeasurementController extends DatasetController {
    }
 
    protected function createQuery(QueryBuilder $query, array $params) {
-      if ($this->isValidParam('include', $params)) {
-         throw new BadParameterException('An endpoint does not support the include parameter.');
-      }
-      
       return $query
          ->select('id', 'code', 'item_name', 'abbreviation')
          ->from(self::NAME);

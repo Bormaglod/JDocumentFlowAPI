@@ -6,22 +6,18 @@ namespace App\Controller;
 
 use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Query\QueryBuilder;
+use App\Exception\BadParameterException;
 
-class OkopfController extends DatasetController {
-   const NAME = 'okopf';
+class CalculationController extends DatasetController {
+   const NAME     = 'calculation';
+   const API_NAME = 'calculations';
 
    protected function getEntityName() {
       return self::NAME;
    }
 
-   protected function createQuery(QueryBuilder $query, array $params) {
-      return $query
-         ->select('id', 'code', 'item_name')
-         ->from(self::NAME);
-   }
-
-   protected function getFields(): array {
-      return ['code', 'name'];
+   protected function getApiName() {
+      return self::API_NAME;
    }
 }
 

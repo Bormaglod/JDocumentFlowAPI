@@ -54,8 +54,14 @@ class DatasetController extends DatabaseController {
             $query->orderBy($params['order-by']);
          }
 
-         $data = $connect->execute($query);
+         if ($this->isValidParam('include', $params)) {
+            foreach (explode(',', $params['include']) as $inc) {
+               $this->addIncludeInfo($query, $inc);
+            }
+         }
 
+         $data = $connect->execute($query);
+         var_dump($data);
          return $response->withJson($this->getFormattedData($data));
       } catch (\PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
@@ -183,22 +189,13 @@ class DatasetController extends DatabaseController {
       return $res;
    }
 
-   private function getRowData(string $apiName, array $attrs): array {
-      return [
-         'type' => $apiName, 
-         'id' => $attrs['id'], 
-         'attributes' => array_filter($attrs, function($x) { return $x != 'id'; }, ARRAY_FILTER_USE_KEY),
-         'links' => [ 'self' => 'http://' . gethostname() . ':8081/' . $apiName . '/' . $attrs['id']]
-      ];
-   }
-
    /*
       Запрос SELECT может содержать повторяющиеся имена столбцов (например, при использовании JOIN).
       В этом случае в массиве $row повторяющиеся столбцы будут объеденены в массив и записаны
       в соответствующее поле. Функция возвращает одномерный массив, в котором повторяющееся поле 
       будет содержать значение из вышеуказанного массива с индексом $index.
    */
-   protected function getNormalRow(array $row, int $index): array {
+   /*protected function getNormalRow(array $row, int $index): array {
       $res = [];
       foreach ($row as $column => $value) {
          if (gettype($value) == 'array') {
@@ -210,7 +207,7 @@ class DatasetController extends DatabaseController {
       }
 
       return $res;
-   }
+   }*/
 
    protected function getBaseAttributes(array $row): array {
       return $row;
@@ -261,6 +258,19 @@ class DatasetController extends DatabaseController {
 
    protected function getIgnoreParams(): array {
       return [];
+   }
+
+   protected function addIncludeInfo(QueryBuilder $query, string $include): void {
+      throw new BadParameterException('An endpoint does not support the include parameter.');
+   }
+
+   private function getRowData(string $apiName, array $attrs): array {
+      return [
+         'type' => $apiName, 
+         'id' => $attrs['id'], 
+         'attributes' => array_filter($attrs, function($x) { return $x != 'id'; }, ARRAY_FILTER_USE_KEY),
+         'links' => [ 'self' => 'http://' . gethostname() . ':8081/' . $apiName . '/' . $attrs['id']]
+      ];
    }
 }
 

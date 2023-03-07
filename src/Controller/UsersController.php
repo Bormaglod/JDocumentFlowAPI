@@ -15,10 +15,6 @@ class UsersController extends DatasetController {
    }
 
    protected function createQuery(QueryBuilder $query, array $params) {
-      if ($this->isValidParam('include', $params)) {
-         throw new BadParameterException('An endpoint does not support the include parameter.');
-      }
-
       return $query
          ->select('id', 'name', 'surname', 'first_name', 'middle_name')
          ->from(self::NAME)
