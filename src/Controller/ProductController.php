@@ -8,6 +8,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Query\QueryBuilder;
 use App\Exception\BadParameterException;
 use App\Controller\MeasurementController;
+use App\Core\Relationship;
 
 class ProductController extends DirectoryController {
     private $show_measurement = false;
@@ -21,7 +22,7 @@ class ProductController extends DirectoryController {
     }
 
     protected function addIncludeInfo(QueryBuilder $query, string $include): void {
-        if ($include == 'measurement') {
+        if ($include == MeasurementController::NAME) {
             $this->show_measurement = true;
 
             $query = $query
@@ -29,7 +30,7 @@ class ProductController extends DirectoryController {
                 ->leftJoin('measurement as m', "m.id = {$query->getAlias()}.measurement_id");
         }
         else {
-            throw new BadParameterException('Server does not support inclusion of resources from a path.');
+            throw new BadParameterException("The resource does not have an '$include' relationship path.");
         }
     }
 
@@ -48,9 +49,7 @@ class ProductController extends DirectoryController {
                 $measurement[mb_substr($key, 2)] = $value;
             }
 
-            $data = [ 'data' => [ 'type' => MeasurementController::API_NAME, 'id' => $measurement['id']]];
-            $rels = [ 'measurement' => $data ];
-            return [ 'rel_name' => $rels, 'include' => $measurement, 'api_name' => MeasurementController::API_NAME ];
+            return array(new Relationship($measurement['id'], MeasurementController::API_NAME, MeasurementController::NAME, $measurement));
         }
         else {
             return parent::getRelations($row);

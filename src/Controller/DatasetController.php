@@ -61,7 +61,7 @@ class DatasetController extends DatabaseController {
          }
 
          $data = $connect->execute($query);
-         var_dump($data);
+         //var_dump($data);
          return $response->withJson($this->getFormattedData($data));
       } catch (\PDOException $e) {
          return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
@@ -172,9 +172,26 @@ class DatasetController extends DatabaseController {
       foreach ($source['rows'] as $row) {
          $newData = $this->getRowData($this->getApiName(), $this->getBaseAttributes($row));
          $rels = $this->getRelations($row);
-         if ($rels !== []) {
-            $newData['relationships'] = $rels['rel_name'];
-            $included[] = $this->getRowData($rels['api_name'], $rels['include']);
+
+         if (count($rels) == 1) {
+            $newData['relationships'] = $rels[0]->getRelationships();
+         }
+         else {
+            $rs = [];
+            foreach ($rels as $rel) {
+               $rs[] = $rel->getRelationships();
+            }
+
+            if ($rs !== []) {
+               $newData['relationships'] = $rs;
+            }
+         }
+
+         foreach ($rels as $rel) {
+            $key = array_search($rel->getId(), array_column($included, 'id'));
+            if ($key === false) {
+               $included[] = $rel->getInclude();
+            }
          }
 
          $data[] = $newData;
@@ -188,26 +205,6 @@ class DatasetController extends DatabaseController {
 
       return $res;
    }
-
-   /*
-      Запрос SELECT может содержать повторяющиеся имена столбцов (например, при использовании JOIN).
-      В этом случае в массиве $row повторяющиеся столбцы будут объеденены в массив и записаны
-      в соответствующее поле. Функция возвращает одномерный массив, в котором повторяющееся поле 
-      будет содержать значение из вышеуказанного массива с индексом $index.
-   */
-   /*protected function getNormalRow(array $row, int $index): array {
-      $res = [];
-      foreach ($row as $column => $value) {
-         if (gettype($value) == 'array') {
-            $res[$column] = $value[$index];
-         }
-         else {
-            $res[$column] = $value;
-         }
-      }
-
-      return $res;
-   }*/
 
    protected function getBaseAttributes(array $row): array {
       return $row;

@@ -8,6 +8,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Query\QueryBuilder;
 use App\Exception\BadParameterException;
 use App\Controller\CalculationController;
+use App\Core\Relationship;
 
 class GoodsController extends ProductController {
     const NAME = 'goods';
@@ -33,7 +34,7 @@ class GoodsController extends ProductController {
     }
 
     protected function addIncludeInfo(QueryBuilder $query, string $include): void {
-        if ($include == 'calculation') {
+        if ($include == CalculationController::NAME) {
             $this->show_calc = true;
 
             $query = $query
@@ -53,14 +54,11 @@ class GoodsController extends ProductController {
         $res = parent::getRelations($row);
         if ($this->show_calc) {
             $calc = [];
-            foreach (array_slice($row, $this->getCountBaseAttributes(), 11) as $key => $value) {
+            foreach (array_slice($row, $this->getCountBaseAttributes() + 4, 11) as $key => $value) {
                 $calc[mb_substr($key, 2)] = $value;
             }
 
-            $data = [ 'data' => [ 'type' => CalculationController::API_NAME, 'id' => $calc['id']]];
-            $rels = [ 'calculation' => $data ];
-            //return [ 'rel_name' => $rels, 'include' => $measurement, 'api_name' => MeasurementController::API_NAME ];
-            //$res[''];
+            $res[] = new Relationship($calc['id'], CalculationController::API_NAME, CalculationController::NAME, $calc);
         }
         
         return $res;
