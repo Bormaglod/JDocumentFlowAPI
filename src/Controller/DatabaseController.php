@@ -82,17 +82,19 @@ class DatabaseController {
 
    protected function createToken($id, $user_name)
    {
-      $expire = strtotime('+1 month');
-
+      $now = new \DateTime();
+      $expire = new \DateTime("+1 month");// strtotime('+1 month');
+      
       $token = [
-         'exp' => $expire,             // время жизни токена
+         "iat" => $now->getTimeStamp(),
+         'exp' => $expire->getTimeStamp(), // время жизни токена
          'user' => [
-            'id' => $id,               // идентификатор пользователя
-            'name' => $user_name       // имя пользователя
+            'id' => $id,                   // идентификатор пользователя
+            'name' => $user_name           // имя пользователя
          ]   
       ];
 
-      return JWT::encode($token, getenv('SECRET_KEY'));
+      return JWT::encode($token, getenv('SECRET_KEY'), "HS256");
    }
 
    protected function checkToken(Request $request) {

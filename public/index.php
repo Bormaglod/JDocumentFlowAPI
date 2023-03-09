@@ -38,7 +38,12 @@ $app->add(function ($request, $handler) {
 });
 
 $logger = new Logger("slim");
-$rotating = new RotatingFileHandler(__DIR__ . '/../logs/slim-debug.log', 0, Logger::DEBUG);
+
+/*
+   установка уровня логгирования в Logger::DEBUG на локальном сервере работает,
+   а на удаленном возвращает 401 ошибку
+*/
+$rotating = new RotatingFileHandler(__DIR__ . '/../logs/slim-debug.log', 0, Logger::WARNING);
 $logger->pushHandler($rotating);
 
 $app->add(new JwtAuthentication([
