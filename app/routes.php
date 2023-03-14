@@ -2,19 +2,24 @@
 // Copyright © 2018-2023 Тепляшин Сергей Васильевич. Contacts: <sergio.teplyashin@yandex.ru>
 // License: https://opensource.org/licenses/GPL-3.0
 
-use Psr\Http\Message\ServerRequestInterface as Request;
-use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\{
+   ServerRequestInterface as Request,
+   ResponseInterface as Response
+};
 use App\Connection\PostgresConnection as PostgresConnection;
 use App\Exception\AccessException as AccessException;
 use Slim\Interfaces\RouteCollectorProxyInterface as Group;
-use App\Controller\DatabaseController as Database;
-use App\Controller\UsersController as Users;
-use App\Controller\MeasurementController as Measurement;
-use App\Controller\OkopfController as Okopf;
-use App\Controller\MaterialController as Material;
-use App\Controller\GoodsController as Goods;
+use App\Controller\{
+   LoginController as Login,
+   UsersController as Users,
+   MeasurementController as Measurement,
+   OkopfController as Okopf,
+   MaterialController as Material,
+   GoodsController as Goods,
+   CalculationController as Calculation
+};
 
-$app->post('/login', Database::class . ':login');
+$app->post('/login', Login::class . ':login');
 
 $app->group('/users', function (Group $group) {
    $group->get('', Users::class . ':get');
@@ -47,22 +52,11 @@ $app->group('/materials', function (Group $group) {
 $app->group('/goods', function (Group $group) {
    $group->get('', Goods::class . ':get');
    $group->get('/{id}', Goods::class . ':getById');
+   $group->get('/{id}/calculations', Calculation::class . ':getByOwner');
 });
-/*$app->group('/goods', function (Group $group) {
-   $group->get('', Goods::class . ':get');
-   $group->get('/{id}', Goods::class . ':getById');
-   
-   $group->post('', Goods::class . ':post');
-   $group->put('/{id}', Goods::class . ':put');
-   $group->patch('/{id}', Goods::class . ':patch');
-   $group->patch('/{id}/move', Goods::class . ':moveToFolder');
-   $group->patch('/{id}/change-state', Goods::class . ':changeState');
-   $group->delete('/{id}', Goods::class . ':delete');
 
-   //$group->get('/materials', Goods::class . ':getMaterials');
-   //$group->get('/materials/{id}', Goods::class . ':getMaterialById');
-   //$group->get('/productions', Goods::class . ':getProductions');
-   //$group->get('/productions/{id}', Goods::class . ':getProductionById');
-});*/
+$app->group('/calculations', function (Group $group) {
+   $group->get('/{id}', Calculation::class . ':getById');
+});
 
 ?>

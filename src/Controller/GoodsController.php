@@ -11,6 +11,7 @@ use App\Controller\CalculationController;
 use App\Core\Relationship;
 
 class GoodsController extends ProductController {
+    
     const NAME = 'goods';
     
     private $show_calc = false;

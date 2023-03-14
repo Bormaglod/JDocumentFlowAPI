@@ -8,6 +8,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Query\QueryBuilder;
 
 class MaterialController extends ProductController {
+    
     const NAME     = 'material';
     const API_NAME = 'materials';
 

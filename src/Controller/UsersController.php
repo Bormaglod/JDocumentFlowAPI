@@ -8,6 +8,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Query\QueryBuilder;
 
 class UsersController extends DatasetController {
+   
    const NAME = 'user_alias';
 
    protected function getEntityName() {
@@ -21,7 +22,7 @@ class UsersController extends DatasetController {
          ->where('not is_system');
    }
 
-   protected function getIgnoreParams()
+   protected function getIgnoreParams(): array
    {
       return array('show-deleted');
    }

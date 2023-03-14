@@ -7,6 +7,7 @@ namespace App\Connection;
 use PDO;
 
 class PostgresConnection {
+    
     private static $connect = null;
 
     private $pdo  = null;

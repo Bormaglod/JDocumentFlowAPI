@@ -5,16 +5,16 @@
 namespace App\Exception;
 
 use Exception;
-use App\Controller\DatabaseController;
+use App\Core\{AppCode, HttpResponse};
 
-class BadParameterException extends CustomException
-{
+class BadParameterException extends CustomException {
+
    function __construct($message) {
-      parent::__construct($message, DatabaseController::BAD_PARAMETER);
+      parent::__construct($message, AppCode::BAD_PARAMETER);
    }
 
    public function getHttpCode() {
-      return DatabaseController::HTTP_BAD_REQUEST;
+      return HttpResponse::HTTP_BAD_REQUEST;
    }
 }
 

@@ -5,16 +5,16 @@
 namespace App\Exception;
 
 use Exception;
-use App\Controller\DatabaseController;
+use App\Core\HttpResponse;
 
-class CustomException extends Exception
-{
+class CustomException extends Exception {
+   
    public function getMessageData() {
       return ['error_code' => $this->getCode(), 'message' => $this->getMessage()];
    }
 
    public function getHttpCode() {
-      return DatabaseController::HTTP_INTERNAL_SERVER_ERROR;
+      return HttpResponse::HTTP_INTERNAL_SERVER_ERROR;
    }
 }
 ?>

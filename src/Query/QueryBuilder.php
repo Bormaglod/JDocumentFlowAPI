@@ -4,8 +4,8 @@
 
 namespace App\Query;
 
-class QueryBuilder
-{
+class QueryBuilder {
+
     private $fields = [];
     private $conditions = [];
     private $from = null;
@@ -18,7 +18,7 @@ class QueryBuilder
     private $withs = [];
     private $groups = [];
 
-    public function __call($name, $args) {
+    function __call($name, $args) {
         if ($name == 'leftJoin') {
             switch (count($args)) {
                 case 2:
@@ -34,30 +34,25 @@ class QueryBuilder
         }
     }
 
-    public function __toString(): string
-    {
+    function __toString(): string {
         return $this->getQueryString();
     }
 
-    public function getAlias()
-    {
+    function getAlias() {
         return $this->fromAlias;
     }
 
-    public function select(string ...$select): self
-    {
+    function select(string ...$select): self {
         $this->fields = array_merge($this->fields, $select);
         return $this;
     }
 
-    public function selectWithAlias(string ...$select): self
-    {
+    function selectWithAlias(string ...$select): self {
         $this->fields = array_merge($this->fields, array_map(function($x) { return $this->getAlias() . '.' . $x; }, $select));
         return $this;
     }
 
-    public function where(string ...$where): self
-    {
+    function where(string ...$where): self {
         foreach ($where as $arg) {
             $this->conditions[] = $arg;
         }
@@ -65,8 +60,7 @@ class QueryBuilder
         return $this;
     }
 
-    public function from(string $table, ?string $alias = null): self
-    {
+    function from(string $table, ?string $alias = null): self {
         if ($alias === null) {
             $this->from = $table;
             $this->fromAlias = $table;
@@ -78,20 +72,17 @@ class QueryBuilder
         return $this;
     }
 
-    public function offset(int $offsetValue): self
-    {
+    function offset(int $offsetValue): self {
         $this->offset = $offsetValue;
         return $this;
     }
 
-    public function limit(int $limitValue): self
-    {
+    function limit(int $limitValue): self {
         $this->limit = $limitValue;
         return $this;
     }
 
-    public function orderBy(string ...$order): self
-    {
+    function orderBy(string ...$order): self {
         foreach ($order as $arg) {
             if (\str_contains($arg, '.')) {
                 $this->orders[] = $arg;
@@ -104,8 +95,7 @@ class QueryBuilder
         return $this;
     }
 
-    public function groupBy(string ...$groups): self
-    {
+    function groupBy(string ...$groups): self {
         foreach ($groups as $arg) {
             $this->groups[] = $arg;
         }
@@ -113,39 +103,33 @@ class QueryBuilder
         return $this;
     }
 
-    private function leftJoinCondition(string $table, string $cond): self
-    {
-        $this->joins[] = "LEFT JOIN $table ON ($cond)";
-        return $this;
-    }
-
-    private function leftJoinFields(string $table, string $left, string $right): self
-    {
-        $this->joins[] = "LEFT JOIN $table ON ($left = $right)";
-        return $this;
-    }
-
-    private function leftJoinQuery(QueryBuilder $query, string $alias, string $cond): self
-    {
-        $this->joins[] = "LEFT JOIN ($query) AS $alias ON ($cond)";
-        return $this;
-    }
-
-    public function innerJoin(string $table, string $cond): self
-    {
+    function innerJoin(string $table, string $cond): self {
         $this->joins[] = 'JOIN ' . $table . ' ON ' . $cond;
         return $this;
     }
 
-    public function unionAll(QueryBuilder $query): self 
-    {
+    function unionAll(QueryBuilder $query): self {
         $this->unionQuery = $query;
         return $this;
     }
 
-    public function with(QueryBuilder $query, string $alias, bool $recursive = false): self
-    {
+    function with(QueryBuilder $query, string $alias, bool $recursive = false): self {
         $this->withs[] = array('query' => $query, 'alias' => $alias, 'recursive' => $recursive);
+        return $this;
+    }
+
+    private function leftJoinCondition(string $table, string $cond): self {
+        $this->joins[] = "LEFT JOIN $table ON ($cond)";
+        return $this;
+    }
+
+    private function leftJoinFields(string $table, string $left, string $right): self {
+        $this->joins[] = "LEFT JOIN $table ON ($left = $right)";
+        return $this;
+    }
+
+    private function leftJoinQuery(QueryBuilder $query, string $alias, string $cond): self {
+        $this->joins[] = "LEFT JOIN ($query) AS $alias ON ($cond)";
         return $this;
     }
 

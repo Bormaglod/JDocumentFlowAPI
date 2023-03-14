@@ -4,28 +4,27 @@
 
 namespace App\Controller;
 
-use Psr\Http\Message\ServerRequestInterface as Request;
-use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\{
+   ServerRequestInterface as Request,
+   ResponseInterface as Response
+};
 use App\Connection\PostgresConnection;
-use App\Exception\AccessException;
-use App\Exception\VersionException;
-use App\Exception\NotImplementedException;
-use App\Exception\BadParameterException;
+use App\Exception\{AccessException, BadParameterException, NotImplementedException, VersionException};
 use App\Query\QueryBuilder;
+use App\Core\{AppCode, ExceptionHelper, HttpResponse, JwtAuth};
 
 class DatasetController extends DatabaseController {
-   public function get(Request $request, Response $response, $args) {
+
+   function get(Request $request, Response $response, $args) {
       try {
-         $connect = PostgresConnection::get($this->checkAccess($request));
+         $connect = $this->connect($request);
          $params = $request->getParams();
 
          $query = new QueryBuilder();
          $this->createQuery($query, $params);
          
          if ($this->isValidParam('show-deleted', $params)) {
-            $this->checkBoolParam('show-deleted', $params);
-
-            if ($params['show-deleted'] == 'true') {
+            if ($this->getBoolParam('show-deleted', $params)) {
                $query->where("not {$query->getAlias()}.deleted");
             }
          }
@@ -54,17 +53,13 @@ class DatasetController extends DatabaseController {
             $query->orderBy($params['order-by']);
          }
 
-         if ($this->isValidParam('include', $params)) {
-            foreach (explode(',', $params['include']) as $inc) {
-               $this->addIncludeInfo($query, $inc);
-            }
-         }
+         $this->checkIncludeParams($query, $params);
 
          $data = $connect->execute($query);
-         //var_dump($data);
+
          return $response->withJson($this->getFormattedData($data));
       } catch (\PDOException $e) {
-         return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
+         return $this->getResponseException($response, $e);
       } catch (AccessException | VersionException | BadParameterException $e) {
          return $response->withJson($e->getMessageData(), $e->getHttpCode());
       }
@@ -72,28 +67,36 @@ class DatasetController extends DatabaseController {
 
    function getById(Request $request, Response $response, $args) {
       try {
-         $connect = PostgresConnection::get($this->checkAccess($request));
+         $connect = $this->connect($request);
+         $params = $request->getParams();
          
          $query = new QueryBuilder();
-         $this->createQueryById($query, $request->getParams());
+         $this->createQueryById($query, $params);
+
+         $this->checkIncludeParams($query, $params);
 
          $data = $connect->execute($query, $args);
    
          if ($data['total_rows'] == 0) {
-            return $response->withJson(['error_code' => self::OBJECT_NOT_EXISTS, 'message' => 'Объект с таким id не существует.'], self::HTTP_NOT_FOUND);
+            return $response->withJson(
+               [
+                  'error_code' => AppCode::OBJECT_NOT_EXISTS, 
+                  'message' => 'Объект с таким id не существует.'
+               ], 
+               HttpResponse::HTTP_NOT_FOUND);
          }
    
          return $response->withJson($this->getFormattedData($data));
       } catch (\PDOException $e) {
-         return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
-      } catch (AccessException | VersionException $e) {
+         return $this->getResponseException($response, $e);
+      } catch (AccessException | VersionException | BadParameterException $e) {
          return $response->withJson($e->getMessageData(), $e->getHttpCode());
       }
    }
 
    function post(Request $request, Response $response, $args) {
       try {
-         $connect = PostgresConnection::get($this->checkAccess($request));
+         $connect = $this->connect($request);
          $entity = $this->getEntityName();
          $id = $connect->insert($entity, $request->getParsedBody());
       
@@ -102,64 +105,67 @@ class DatasetController extends DatabaseController {
          preg_match_all($re, $request->getUri(), $matches, PREG_SET_ORDER, 0);
 
          return $response
-            ->withStatus(self::HTTP_CREATED)
+            ->withStatus(HttpResponse::HTTP_CREATED)
             ->withHeader('Location', "/{$matches[0][1]}/{$id}");
       } catch (\PDOException $e) {
-         return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
-      } catch (AccessException | VersionException $e) {
+         return $this->getResponseException($response, $e);
+      } catch (AccessException | VersionException | BadParameterException $e) {
          return $response->withJson($e->getMessageData(), $e->getHttpCode());
       }
    }
 
    function put(Request $request, Response $response, $args) {
       try {
-         $connect = PostgresConnection::get($this->checkAccess($request));
+         $connect = $this->connect($request);
          $connect->updateAll($this->getEntityName(), $args['id'], $this->getFields(), $request->getParsedBody());
    
-         return $response->withStatus(self::HTTP_NO_CONTENT);
+         return $response->withStatus(HttpResponse::HTTP_NO_CONTENT);
       } catch (\PDOException $e) {
-         return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
-      } catch (AccessException | VersionException $e) {
+         return $this->getResponseException($response, $e);
+      } catch (AccessException | VersionException | BadParameterException $e) {
          return $response->withJson($e->getMessageData(), $e->getHttpCode());
       }
    }
 
    function patch(Request $request, Response $response, $args) {
       try {
-         $connect = PostgresConnection::get($this->checkAccess($request));
+         $connect = $this->connect($request);
          $connect->update($this->getEntityName(), $args['id'], $request->getParsedBody());
    
-         $query = $this->getQueryById($request->getParams());
+         $query = new QueryBuilder();
+         $this->createQueryById($query, $request->getParams());
+
          $data = $connect->execute($query, $args);
 
          return $response->withJson($this->getFormattedData($data));
       } catch (\PDOException $e) {
-         return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
-      } catch (AccessException | VersionException $e) {
+         return $this->getResponseException($response, $e);
+      } catch (AccessException | VersionException | BadParameterException $e) {
          return $response->withJson($e->getMessageData(), $e->getHttpCode());
       }
    }
 
    function delete(Request $request, Response $response, $args) {
       try {
-         $connect = PostgresConnection::get($this->checkAccess($request));
+         $connect = $this->connect($request);
          $params = $request->getParams();
 
+         $wipe = false;
          if ($this->isValidParam('wipe', $params)) {
-            $this->checkBoolParam('wipe', $params);
+            $wipe = $this->getBoolParam('wipe', $params);
+         }
 
-            if ($params['wipe'] == 'true') {
-               $connect->wipe($this->getEntityName(), $args['id']);
-            }
-            else {
-               $connect->delete($this->getEntityName(), $args['id']);
-            }
+         if ($wipe) {
+            $connect->wipe($this->getEntityName(), $args['id']);
+         }
+         else {
+            $connect->delete($this->getEntityName(), $args['id']);
          }
    
-         return $response->withStatus(self::HTTP_NO_CONTENT);
+         return $response->withStatus(HttpResponse::HTTP_NO_CONTENT);
       } catch (\PDOException $e) {
-         return $response->withJson(['error_code' => $e->getCode(), 'message' => $e->getMessage(), 'extended' => $this->getExtendErrors($e)], self::HTTP_INTERNAL_SERVER_ERROR);
-      } catch (AccessException | VersionException $e) {
+         return $this->getResponseException($response, $e);
+      } catch (AccessException | VersionException | BadParameterException $e) {
          return $response->withJson($e->getMessageData(), $e->getHttpCode());
       }
    }
@@ -222,10 +228,16 @@ class DatasetController extends DatabaseController {
       return false;
    }
 
-   protected function checkBoolParam(string $paramName, array $params) {
-      if (!array_search($params[$paramName], array('', 'true', "false"))) {
-         throw new BadParameterException(['error_code' => DatabaseController::BAD_PARAMETER, 'message' => "Параметр $paramName должен иметь значение 'true', 'false' или пустая строка."], self::HTTP_BAD_REQUEST);
+   protected function getBoolParam(string $paramName, array $params, bool $default = true) {
+      if ($params[$paramName] == '') {
+         return $default;
       }
+
+      if (array_search($params[$paramName], ['false', 'true']) === false) {
+         throw new BadParameterException("Параметр $paramName должен иметь значение 'true', 'false' или пустая строка.", HttpResponse::HTTP_BAD_REQUEST);
+      }
+
+      return $params[$paramName] == 'true';
    }
 
    protected function getEntityName() {
@@ -268,6 +280,14 @@ class DatasetController extends DatabaseController {
          'attributes' => array_filter($attrs, function($x) { return $x != 'id'; }, ARRAY_FILTER_USE_KEY),
          'links' => [ 'self' => 'http://' . gethostname() . ':8081/' . $apiName . '/' . $attrs['id']]
       ];
+   }
+
+   private function checkIncludeParams(QueryBuilder $query, $params) {
+      if ($this->isValidParam('include', $params)) {
+         foreach (explode(',', $params['include']) as $inc) {
+            $this->addIncludeInfo($query, $inc);
+         }
+      }
    }
 }
 

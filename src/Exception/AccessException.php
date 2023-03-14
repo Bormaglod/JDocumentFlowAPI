@@ -4,12 +4,12 @@
 
 namespace App\Exception;
 
-use App\Controller\DatabaseController;
+use App\Core\HttpResponse;
 
-class AccessException extends CustomException
-{
-   public function getHttpCode() {
-      return DatabaseController::HTTP_UNAUTHORIZED;
+class AccessException extends CustomException {
+
+   function getHttpCode() {
+      return HttpResponse::HTTP_UNAUTHORIZED;
    }
 }
 

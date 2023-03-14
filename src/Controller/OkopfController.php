@@ -8,6 +8,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Query\QueryBuilder;
 
 class OkopfController extends DatasetController {
+   
    const NAME = 'okopf';
 
    protected function getEntityName() {

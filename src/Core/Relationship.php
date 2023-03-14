@@ -5,6 +5,7 @@
 namespace App\Core;
 
 class Relationship {
+   
    private $id;
    private $type;
    private $include;

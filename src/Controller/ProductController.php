@@ -11,6 +11,7 @@ use App\Controller\MeasurementController;
 use App\Core\Relationship;
 
 class ProductController extends DirectoryController {
+    
     private $show_measurement = false;
 
     protected function createQuery(QueryBuilder $query, array $params) {

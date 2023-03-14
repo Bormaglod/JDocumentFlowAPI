@@ -6,8 +6,7 @@ namespace App\Exception;
 
 use Exception;
 
-class NotImplementedException extends Exception
-{
+class NotImplementedException extends Exception {
 }
 
 ?>
